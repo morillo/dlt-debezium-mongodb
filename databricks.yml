@@ -1,0 +1,62 @@
+# Databricks Asset Bundle for the MongoDB Debezium CDC pipeline.
+#
+# One bundle, three SDLC targets. Every source-specific value is a
+# variable, so one deployment per collection is configured entirely
+# from the command line or CI:
+#   databricks bundle deploy -t dev --var="collection=customers"
+
+bundle:
+  name: dlt-debezium-mongodb
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for the pipeline's datasets.
+    default: cdc_dev
+  target_schema:
+    description: Unity Catalog schema for the bronze/silver tables.
+    default: cdc_mongo
+  landing_root:
+    description: Directory (e.g. a UC volume) where Debezium events land.
+    default: /Volumes/cdc_dev/landing/debezium
+  database:
+    description: Source MongoDB database name.
+    default: shopdb
+  collection:
+    description: Source MongoDB collection name.
+    default: customers
+  projection:
+    description: >-
+      Optional semicolon-separated SQL expressions over the VARIANT
+      document; when set, a <collection>_typed materialized view is
+      created.
+    default: ""
+
+targets:
+  dev:
+    mode: development # prefixes resources per user, allows destructive dev
+    default: true
+    # workspace:
+    #   host: https://<your-dev-workspace>.cloud.databricks.com
+
+  test:
+    mode: production # deployed by CI as a service principal, no prefixing
+    variables:
+      catalog: cdc_test
+      landing_root: /Volumes/cdc_test/landing/debezium
+    # workspace:
+    #   host: https://<your-test-workspace>.cloud.databricks.com
+    # run_as:
+    #   service_principal_name: <test-sp-application-id>
+
+  prod:
+    mode: production
+    variables:
+      catalog: cdc_prod
+      landing_root: /Volumes/cdc_prod/landing/debezium
+    # workspace:
+    #   host: https://<your-prod-workspace>.cloud.databricks.com
+    # run_as:
+    #   service_principal_name: <prod-sp-application-id>

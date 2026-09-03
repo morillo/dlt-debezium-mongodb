@@ -1,0 +1,46 @@
+# CI for the MongoDB Debezium CDC pipeline bundle.
+# Lint always runs; bundle validation skips gracefully when Databricks
+# secrets are not configured, so the workflow stays green on repos
+# without a wired workspace.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Lint
+        run: pipx run ruff check --line-length 79 src
+
+  validate-bundle:
+    runs-on: ubuntu-latest
+    needs: lint
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for Databricks credentials
+        id: creds
+        run: |
+          if [ -n "$DATABRICKS_HOST" ] && [ -n "$DATABRICKS_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Databricks secrets not configured;" \
+              "skipping bundle validation."
+          fi
+      - uses: databricks/setup-cli@main
+        if: steps.creds.outputs.present == 'true'
+      - name: Validate bundle
+        if: steps.creds.outputs.present == 'true'
+        run: databricks bundle validate -t dev
